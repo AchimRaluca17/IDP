@@ -1,0 +1,71 @@
+version: '2'
+
+services:
+  service:
+    build: Service/.
+    links:
+      - db
+    env_file:
+      - 'Service/.env'
+    ports:
+      - '8080:6000'
+
+  client:
+    build: client/.
+    links:
+      - managemenet_server
+    stdin_open: true
+    tty: true
+
+  managemenet_server:
+    build: management-app/.
+    links:
+      - db
+    env_file:
+      - 'management-app/.env'
+    ports:
+      - '8000:5000'
+
+  db:
+    build: db/.
+    image: mysql:5.7.22
+    ports:
+      - "32000:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: db_admin
+      MYSQL_PASSWORD: db_admin
+      MYSQL_DATABASE: idp_db
+
+# the login credentials are admin:admin
+  grafana:
+    build: graf/.
+    image: grafana/grafana
+    depends_on:
+      - prometheus
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./graf/provisioning/:/etc/grafana/provisioning/
+    environment:
+      GF_INSTALL_PLUGINS: percona-percona-app
+
+  prom_mysql_exporter:
+    image: prom/mysqld-exporter
+    depends_on:
+      - db
+    ports:
+      - '9104:9104'
+    environment:
+      DATA_SOURCE_NAME: root:root@(db:3306)/idp_db
+    command: /bin/mysqld_exporter collect.binlog_size=true collect.info_schema.processlist=true
+
+  prometheus:
+    build: prometheus/.
+    image: prom/prometheus
+    volumes:
+      - ./prometheus:/etc/prometheus
+    links:
+      - prom_mysql_exporter
+    ports:
+      - '9090:9090'
